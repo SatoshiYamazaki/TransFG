@@ -17,6 +17,15 @@ from .dist_util import set_seed_all
 logger = logging.getLogger(__name__)
 
 
+def canonical_dataset_name(name: str) -> str:
+    """Normalize dataset identifiers to match CLI/openapi contract."""
+    aliases = {
+        "flower102": "flowers-102",
+        "flowers102": "flowers-102",
+    }
+    return aliases.get(name, name)
+
+
 class SyntheticDataset(Dataset):
     """Tiny synthetic dataset for smoke tests on CPU/MPS."""
 
@@ -65,6 +74,8 @@ def build_output_paths(output_dir: str, run_name: str) -> dict:
 def get_loader(args):
     if args.local_rank not in [-1, 0]:
         torch.distributed.barrier()
+
+    args.dataset = canonical_dataset_name(getattr(args, "dataset", ""))
 
     num_workers = getattr(args, "num_workers", 2)
 
@@ -169,9 +180,9 @@ def get_loader(args):
         trainset = Flowers102(root=args.data_root, split="train", download=False, transform=train_transform)
         testset = Flowers102(root=args.data_root, split="val", download=False, transform=test_transform)
 
-        if getattr(args, "tiny_train_subset", "") == "flowers102_tiny":
+        if getattr(args, "tiny_train_subset", "") == "flower102_tiny":
             trainset = maybe_limit_subset(trainset, args.train_batch_size * 2)
-        if getattr(args, "tiny_infer_subset", "") == "flowers102_tiny":
+        if getattr(args, "tiny_infer_subset", "") == "flower102_tiny":
             testset = maybe_limit_subset(testset, args.eval_batch_size * 2)
     elif args.dataset == 'synthetic':
         trainset = SyntheticDataset(length=16, num_classes=4, image_size=(args.img_size, args.img_size))

@@ -22,8 +22,8 @@ paths:
                   example: smoke_mps
                 dataset:
                   type: string
-                  enum: [flower102, synthetic, CUB_200_2011, car, dog, nabirds, INat2017]
-                  example: flower102
+                  enum: [flowers-102, flower102, synthetic, CUB_200_2011, car, dog, nabirds, INat2017]
+                  example: flowers-102
                 data_root:
                   type: string
                   example: ./data
@@ -91,8 +91,8 @@ paths:
                   example: cub_eval
                 dataset:
                   type: string
-                  enum: [flower102, synthetic, CUB_200_2011, car, dog, nabirds, INat2017]
-                  example: flower102
+                  enum: [flowers-102, flower102, synthetic, CUB_200_2011, car, dog, nabirds, INat2017]
+                  example: flowers-102
                 data_root:
                   type: string
                   example: ./data

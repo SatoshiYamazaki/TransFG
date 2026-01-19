@@ -68,15 +68,17 @@ pip3 install -r requirements.txt
 
 ### 4. Smoke train (flower102 tiny, fp32)
 
-Single-device run on MacBook Air M2 (prefers MPS, falls back to CPU). Uses the flower102 tiny subsets (≤2 batches) for a fast smoke pass:
+Single-device run on MacBook Air M2 (prefers MPS, falls back to CPU). Uses ViT-B_16 pretrained model.
+Uses the flower102 tiny subsets (≤2 batches) for a fast smoke pass:
 
 ```bash
 DATA_ROOT=${DATA_ROOT:-/path/to/data}
 python train.py --name flower_mps \
-  --dataset flower102 --data_root "$DATA_ROOT"/flower102 --model_type testing --img_size 64 \
+  --dataset flowers-102 --data_root "$DATA_ROOT"/flowers-102 --model_type ViT-B_16 --img_size 64 \
   --num_steps 10 --eval_every 5 --train_batch_size 4 --eval_batch_size 2 \
   --output_dir output --prefer_mps \
-  --tiny_train_subset flower102_tiny --tiny_infer_subset flower102_tiny
+  --tiny_train_subset flower102_tiny --tiny_infer_subset flower102_tiny \
+  --pretrained_dir /path/to/ViT-B_16.npz 
 ```
 
 Artifacts: TensorBoard at `output/tb/flower_mps`, predictions at `output/flower_mps/fiftyone/predictions.jsonl`, labelmap at `output/flower_mps/labelmap.json`, env stamp at `output/flower_mps/env_stamp.json`, and retention note at `output/flower_mps/RETENTION.txt`.
@@ -88,7 +90,7 @@ Run eval-only against an existing checkpoint:
 ```bash
 DATA_ROOT=${DATA_ROOT:-/path/to/data}
 python eval.py --name flower_eval \
-  --dataset flower102 --data_root "$DATA_ROOT"/flower102 --img_size 64 --eval_batch_size 2 \
+  --dataset flowers-102 --data_root "$DATA_ROOT"/flowers-102 --img_size 64 --eval_batch_size 2 \
   --checkpoint output/flower_mps/checkpoints/ckpt.bin \
   --output_dir output --prefer_mps --tiny_infer_subset flower102_tiny
 ```

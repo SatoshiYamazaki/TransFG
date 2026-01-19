@@ -19,7 +19,7 @@ from tqdm import tqdm
 
 from models.modeling import VisionTransformer, CONFIGS
 from utils.scheduler import WarmupLinearSchedule, WarmupCosineSchedule
-from utils.data_utils import get_loader, build_output_paths
+from utils.data_utils import get_loader, build_output_paths, canonical_dataset_name
 from utils.dataset import write_labelmap, default_labels_for_dataset
 from utils.dist_util import get_world_size, detect_device, set_seed_all, write_env_stamp
 
@@ -69,6 +69,7 @@ def save_model(args, model):
 
 def setup(args):
     # Prepare model
+    args.dataset = canonical_dataset_name(args.dataset)
     config = CONFIGS[args.model_type]
     config.split = args.split
     config.slide_step = args.slide_step
@@ -335,14 +336,24 @@ def train(args, model):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--name", required=True, help="Name of this run. Used for monitoring.")
-    parser.add_argument("--dataset", choices=["flowers-102", "CUB_200_2011", "car", "dog", "nabirds", "INat2017", "synthetic"], default="flowers-102", help="Which dataset.")
+    parser.add_argument("--name", required=True, help="Run name (used under output/<name> for artifacts).")
+    parser.add_argument(
+        "--dataset",
+        choices=["flowers-102", "flower102", "CUB_200_2011", "car", "dog", "nabirds", "INat2017", "synthetic"],
+        default="flowers-102",
+        help="Dataset (contract enum: flowers-102|synthetic|CUB_200_2011|car|dog|nabirds|INat2017). Alias flower102 accepted.",
+    )
     default_data_root = os.environ.get("DATA_ROOT", "./data")
-    parser.add_argument("--data_root", type=str, default=default_data_root, help="Root directory containing datasets; synthetic ignores this path.")
-    parser.add_argument("--model_type", choices=["ViT-B_16", "ViT-B_32", "ViT-L_16", "ViT-L_32", "ViT-H_14", "testing"], default="ViT-B_16", help="Which variant to use.")
+    parser.add_argument(
+        "--data_root",
+        type=str,
+        default=default_data_root,
+        help="Root directory containing the dataset folder (e.g., /data -> /data/flowers-102). Ignored for synthetic.",
+    )
+    parser.add_argument("--model_type", choices=["ViT-B_16", "ViT-B_32", "ViT-L_16", "ViT-L_32", "ViT-H_14", "testing"], default="ViT-B_16", help="Model backbone (matches contract enum).")
     parser.add_argument("--pretrained_dir", type=str, default="./weights/ViT-B_16.npz", help="Where to search for pretrained ViT models.")
-    parser.add_argument("--pretrained_model", type=str, default=None, help="Optional fine-tuned checkpoint to load (bin file).")
-    parser.add_argument("--output_dir", default="./output", type=str, help="The output directory where checkpoints/logs will be written.")
+    parser.add_argument("--pretrained_model", type=str, default=None, help="Optional fine-tuned checkpoint to warm start from (.bin file).")
+    parser.add_argument("--output_dir", default="./output", type=str, help="Base output directory for checkpoints/logs (default: ./output).")
     parser.add_argument("--img_size", default=448, type=int, help="Resolution size")
     parser.add_argument("--train_batch_size", default=16, type=int, help="Total batch size for training.")
     parser.add_argument("--eval_batch_size", default=8, type=int, help="Total batch size for eval.")
@@ -364,21 +375,42 @@ def main():
     parser.add_argument("--no-prefer-mps", action="store_false", dest="prefer_mps", help="Disable Apple MPS preference")
     parser.set_defaults(prefer_mps=True)
     parser.add_argument("--eval_only", action="store_true", help="Run validation only (no training) using the provided checkpoint")
-    parser.add_argument("--checkpoint", type=str, default=None, help="Path to fine-tuned checkpoint for eval_only or warm start")
-    parser.add_argument("--fiftyone_output", type=str, default=None, help="Path to write FiftyOne-compatible JSONL predictions during eval")
-    parser.add_argument("--tiny_train_subset", type=str, default="", help="Path to tiny train subset (for metadata/env stamp)")
-    parser.add_argument("--tiny_infer_subset", type=str, default="", help="Path to tiny infer subset (for metadata/env stamp)")
+    parser.add_argument("--checkpoint", type=str, default=None, help="Path to fine-tuned checkpoint (.bin) for eval_only or warm start")
+    parser.add_argument("--fiftyone_output", type=str, default=None, help="Path to write FiftyOne-compatible JSONL predictions during eval (default: output/<name>/fiftyone/predictions.jsonl)")
+    parser.add_argument("--tiny_train_subset", type=str, default="", help="Identifier/path for tiny train subset metadata (e.g., flower102_tiny)")
+    parser.add_argument("--tiny_infer_subset", type=str, default="", help="Identifier/path for tiny infer subset metadata (e.g., flower102_tiny)")
 
     args = parser.parse_args()
+
+    args.dataset = canonical_dataset_name(args.dataset)
 
     paths = build_output_paths(args.output_dir, args.name)
     if args.fiftyone_output is None:
         args.fiftyone_output = str(paths["fiftyone_path"])
 
     data_root = Path(args.data_root)
-    if args.dataset != "synthetic" and data_root.name != args.dataset:
+    dataset_dir_matches = canonical_dataset_name(data_root.name) == args.dataset
+    if args.dataset != "synthetic" and not dataset_dir_matches:
         data_root = data_root / args.dataset
     args.data_root = str(data_root)
+    if args.dataset != "synthetic" and not data_root.exists():
+        message = (
+            f"Dataset directory not found: {data_root}. "
+            "Provide --data_root (or DATA_ROOT) pointing to the folder that contains "
+            f"{args.dataset}."
+        )
+        logger.error(message)
+        raise FileNotFoundError(message)
+
+    if args.checkpoint:
+        checkpoint_path = Path(args.checkpoint)
+        if not checkpoint_path.exists():
+            message = (
+                f"Checkpoint not found at {checkpoint_path}. "
+                "Pass --checkpoint pointing to a .bin file produced by train.py."
+            )
+            logger.error(message)
+            raise FileNotFoundError(message)
 
     if args.local_rank == -1:
         device = detect_device(prefer_mps=args.prefer_mps)

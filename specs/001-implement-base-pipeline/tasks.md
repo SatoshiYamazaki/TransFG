@@ -114,7 +114,7 @@
 **Purpose**: Hardening and doc alignment
 
 - [X] T033 Validate quickstart.md commands end-to-end (train + eval) and update README.md snippets accordingly
-- [ ] T034 Clean up logging/error messages for missing data_root/checkpoint and ensure help text matches contracts/openapi.yaml in train.py and eval.py
+- [X] T034 Clean up logging/error messages for missing data_root/checkpoint and ensure help text matches contracts/openapi.yaml in train.py and eval.py
 
 ---
 
