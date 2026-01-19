@@ -1,8 +1,9 @@
 import os
 import json
+import hashlib
 from os.path import join
 from pathlib import Path
-from typing import List
+from typing import List, Tuple
 
 import numpy as np
 import scipy
@@ -20,10 +21,18 @@ from torchvision.datasets.utils import download_url, list_dir, check_integrity, 
 
 
 def write_labelmap(labels: List[str], path: Path) -> dict:
+    """Write labelmap with checksum for downstream validation."""
     mapping = {str(i): label for i, label in enumerate(labels)}
+    serialized = json.dumps(mapping, sort_keys=True, indent=2).encode("utf-8")
+    checksum = hashlib.sha256(serialized).hexdigest()
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(mapping, indent=2))
-    return mapping
+    path.write_bytes(serialized)
+    return {"mapping": mapping, "checksum": checksum}
+
+
+def default_labels_for_dataset(dataset_name: str, num_classes: int) -> List[str]:
+    """Fallback labels when dataset class names are unavailable."""
+    return [f"{dataset_name}_class_{i}" for i in range(num_classes)]
 
 class CUB():
     def __init__(self, root, is_train=True, data_len=None, transform=None):

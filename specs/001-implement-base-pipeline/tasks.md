@@ -31,11 +31,11 @@
 
 **Purpose**: Core utilities required by all user stories
 
-- [ ] T008 Implement device selection helper with MPS-first CPU fallback and map_location support in utils/dist_util.py
-- [ ] T009 Add deterministic seeding utility (seed all libs, worker init) in utils/data_utils.py
-- [ ] T010 Create output path builder (tb, fiftyone, labelmap, checkpoints, retention) in utils/data_utils.py
-- [ ] T011 Add labelmap writer for flower102 and other datasets with checksum support in utils/dataset.py
-- [ ] T012 Add config hash/run_id helper in utils/dist_util.py (SHA256 of resolved args/config)
+- [X] T008 Implement device selection helper with MPS-first CPU fallback and map_location support in utils/dist_util.py
+- [X] T009 Add deterministic seeding utility (seed all libs, worker init) in utils/data_utils.py
+- [X] T010 Create output path builder (tb, fiftyone, labelmap, checkpoints, retention) in utils/data_utils.py
+- [X] T011 Add labelmap writer for flower102 and other datasets with checksum support in utils/dataset.py
+- [X] T012 Add config hash/run_id helper in utils/dist_util.py (SHA256 of resolved args/config)
 
 **Checkpoint**: Foundation ready - user story implementation can begin
 
@@ -49,8 +49,8 @@
 
 ### Tests for User Story 1 (TDD first)
 
-- [ ] T013 [US1] Add smoke_train pytest covering tiny flower102 train/backward and export assertions in tests/test_smoke.py
-- [ ] T014 [P] [US1] Add TensorBoard/FiftyOne contract test asserting prediction row count equals two eval batches (e.g., 4 rows at eval_batch_size=2) and labelmap presence for flower102 tiny subset in tests/test_smoke.py
+- [X] T013 [US1] Add smoke_train pytest covering tiny flower102 train/backward and export assertions in tests/test_smoke.py
+- [X] T014 [P] [US1] Add TensorBoard/FiftyOne contract test asserting prediction row count equals two eval batches (e.g., 4 rows at eval_batch_size=2) and labelmap presence for flower102 tiny subset in tests/test_smoke.py
 
 ### Implementation for User Story 1
 

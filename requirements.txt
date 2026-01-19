@@ -1,14 +1,14 @@
 torch==2.1.2
 torchvision==0.16.2
 torchaudio==2.1.2
-numpy==2.2.6
+numpy==1.26.4
 tqdm==4.67.1
 tensorboard==2.20.0
 ml-collections==1.1.0
-scipy==1.15.3
+scipy==1.11.4
 matplotlib==3.10.8
 pandas==2.3.3
 Pillow==12.1.0
-opencv-python==4.13.0.90
+opencv-python==4.8.1.78
 fiftyone==1.11.1
 pytest==7.4.4

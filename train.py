@@ -42,7 +42,13 @@ class AverageMeter(object):
         self.avg = self.sum / self.count
 
 def simple_accuracy(preds, labels):
-    return (preds == labels).mean()
+    if isinstance(preds, np.ndarray):
+        preds = torch.from_numpy(preds)
+    if isinstance(labels, np.ndarray):
+        labels = torch.from_numpy(labels)
+    preds = preds.view(-1)
+    labels = labels.view(-1)
+    return (preds == labels).float().mean()
 
 def reduce_mean(tensor, nprocs):
     if not dist.is_available() or not dist.is_initialized():
@@ -147,25 +153,17 @@ def valid(args, model, writer, test_loader, global_step, fiftyone_path: Optional
                     "label": int(l)
                 })
 
-        if len(all_preds) == 0:
-            all_preds.append(preds.detach().cpu().numpy())
-            all_label.append(y.detach().cpu().numpy())
-        else:
-            all_preds[0] = np.append(
-                all_preds[0], preds.detach().cpu().numpy(), axis=0
-            )
-            all_label[0] = np.append(
-                all_label[0], y.detach().cpu().numpy(), axis=0
-            )
+        all_preds.append(preds.detach().cpu())
+        all_label.append(y.detach().cpu())
         epoch_iterator.set_description("Validating... (loss=%2.5f)" % eval_losses.val)
 
-    all_preds, all_label = all_preds[0], all_label[0]
-    accuracy = simple_accuracy(all_preds, all_label)
-    accuracy = torch.tensor(accuracy).to(args.device)
+    all_preds_t = torch.cat(all_preds)
+    all_label_t = torch.cat(all_label)
+    accuracy = simple_accuracy(all_preds_t, all_label_t).to(args.device)
     if dist.is_available() and dist.is_initialized():
         dist.barrier()
     val_accuracy = reduce_mean(accuracy, args.nprocs)
-    val_accuracy = val_accuracy.detach().cpu().numpy()
+    val_accuracy = float(val_accuracy.detach().cpu().item())
 
     logger.info("\n")
     logger.info("Validation Results")
@@ -221,7 +219,7 @@ def train(args, model):
     logger.info("  Gradient Accumulation steps = %d", args.gradient_accumulation_steps)
 
     model.zero_grad()
-    set_seed(args)  # Added here for reproducibility (even between python 2 and 3)
+    set_seed_all(args.seed)
     losses = AverageMeter()
     global_step, best_acc = 0, 0
     start_time = time.time()
@@ -242,16 +240,8 @@ def train(args, model):
 
             preds = torch.argmax(logits, dim=-1)
 
-            if len(all_preds) == 0:
-                all_preds.append(preds.detach().cpu().numpy())
-                all_label.append(y.detach().cpu().numpy())
-            else:
-                all_preds[0] = np.append(
-                    all_preds[0], preds.detach().cpu().numpy(), axis=0
-                )
-                all_label[0] = np.append(
-                    all_label[0], y.detach().cpu().numpy(), axis=0
-                )
+            all_preds.append(preds.detach().cpu())
+            all_label.append(y.detach().cpu())
 
             if args.gradient_accumulation_steps > 1:
                 loss = loss / args.gradient_accumulation_steps
@@ -285,13 +275,13 @@ def train(args, model):
 
                 if global_step % t_total == 0:
                     break
-        all_preds, all_label = all_preds[0], all_label[0]
-        accuracy = simple_accuracy(all_preds, all_label)
-        accuracy = torch.tensor(accuracy).to(args.device)
+        all_preds_t = torch.cat(all_preds)
+        all_label_t = torch.cat(all_label)
+        accuracy = simple_accuracy(all_preds_t, all_label_t).to(args.device)
         if dist.is_available() and dist.is_initialized():
             dist.barrier()
         train_accuracy = reduce_mean(accuracy, args.nprocs)
-        train_accuracy = train_accuracy.detach().cpu().numpy()
+        train_accuracy = float(train_accuracy.detach().cpu().item())
         logger.info("train accuracy so far: %f" % train_accuracy)
         losses.reset()
         if global_step % t_total == 0:
@@ -309,78 +299,40 @@ def train(args, model):
     logger.info("Total Training Time: \t%f" % ((end_time - start_time) / 3600))
 
 def main():
-        parser = argparse.ArgumentParser()
-        # Required parameters
-        parser.add_argument("--name", required=True,
-                        help="Name of this run. Used for monitoring.")
-    parser.add_argument("--dataset", choices=["flower102", "CUB_200_2011", "car", "dog", "nabirds", "INat2017", "synthetic"], default="flower102",
-                        help="Which dataset.")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--name", required=True, help="Name of this run. Used for monitoring.")
+    parser.add_argument("--dataset", choices=["flower102", "CUB_200_2011", "car", "dog", "nabirds", "INat2017", "synthetic"], default="flower102", help="Which dataset.")
     default_data_root = os.environ.get("DATA_ROOT", "./data")
-    parser.add_argument('--data_root', type=str, default=default_data_root,
-            help="Root directory containing datasets; synthetic ignores this path.")
-        parser.add_argument("--model_type", choices=["ViT-B_16", "ViT-B_32", "ViT-L_16",
-                                            "ViT-L_32", "ViT-H_14", "testing"],
-                        default="ViT-B_16",
-                        help="Which variant to use.")
-        parser.add_argument("--pretrained_dir", type=str, default="./weights/ViT-B_16.npz",
-                        help="Where to search for pretrained ViT models.")
-        parser.add_argument("--pretrained_model", type=str, default=None,
-                        help="Optional fine-tuned checkpoint to load (bin file).")
-        parser.add_argument("--output_dir", default="./output", type=str,
-                        help="The output directory where checkpoints/logs will be written.")
-        parser.add_argument("--img_size", default=448, type=int,
-                        help="Resolution size")
-        parser.add_argument("--train_batch_size", default=16, type=int,
-                        help="Total batch size for training.")
-        parser.add_argument("--eval_batch_size", default=8, type=int,
-                        help="Total batch size for eval.")
-        parser.add_argument("--eval_every", default=100, type=int,
-                        help="Run prediction on validation set every so many steps."
-                            "Will always run one evaluation at the end of training.")
-
-        parser.add_argument("--learning_rate", default=3e-2, type=float,
-                        help="The initial learning rate for SGD.")
-        parser.add_argument("--weight_decay", default=0, type=float,
-                        help="Weight deay if we apply some.")
-        parser.add_argument("--num_steps", default=10000, type=int,
-                        help="Total number of training epochs to perform.")
-        parser.add_argument("--decay_type", choices=["cosine", "linear"], default="cosine",
-                        help="How to decay the learning rate.")
-        parser.add_argument("--warmup_steps", default=500, type=int,
-                        help="Step of training to perform learning rate warmup for.")
-        parser.add_argument("--max_grad_norm", default=1.0, type=float,
-                        help="Max gradient norm.")
-
-        parser.add_argument("--local_rank", type=int, default=-1,
-                            help="local_rank for distributed training on gpus")
-        parser.add_argument('--seed', type=int, default=42,
-                            help="random seed for initialization")
-        parser.add_argument('--gradient_accumulation_steps', type=int, default=1,
-                            help="Number of updates steps to accumulate before performing a backward/update pass.")
-        parser.add_argument('--smoothing_value', type=float, default=0.0,
-                        help="Label smoothing value\n")
-
-        parser.add_argument('--split', type=str, default='non-overlap',
-                        help="Split method")
-        parser.add_argument('--slide_step', type=int, default=12,
-                        help="Slide step for overlap split")
-        parser.add_argument('--num_workers', type=int, default=2,
-                        help="DataLoader workers (set 0 for CPU/MPS debugging)")
-        parser.add_argument('--prefer_mps', action='store_true', dest='prefer_mps',
-                            help="Prefer Apple MPS backend when available")
-        parser.add_argument('--no-prefer-mps', action='store_false', dest='prefer_mps',
-                            help="Disable Apple MPS preference")
-        parser.set_defaults(prefer_mps=True)
-        parser.add_argument('--eval_only', action='store_true',
-                        help="Run validation only (no training) using the provided checkpoint")
-        parser.add_argument('--checkpoint', type=str, default=None,
-                        help="Path to fine-tuned checkpoint for eval_only or warm start")
-        parser.add_argument('--fiftyone_output', type=str, default=None,
-                        help="Path to write FiftyOne-compatible JSONL predictions during eval")
-        parser.add_argument('--tiny_train_subset', type=str, default="",
-                        help="Path to tiny train subset (for metadata/env stamp)")
-        parser.add_argument('--tiny_infer_subset', type=str, default="",
-                        help="Path to tiny infer subset (for metadata/env stamp)")
+    parser.add_argument("--data_root", type=str, default=default_data_root, help="Root directory containing datasets; synthetic ignores this path.")
+    parser.add_argument("--model_type", choices=["ViT-B_16", "ViT-B_32", "ViT-L_16", "ViT-L_32", "ViT-H_14", "testing"], default="ViT-B_16", help="Which variant to use.")
+    parser.add_argument("--pretrained_dir", type=str, default="./weights/ViT-B_16.npz", help="Where to search for pretrained ViT models.")
+    parser.add_argument("--pretrained_model", type=str, default=None, help="Optional fine-tuned checkpoint to load (bin file).")
+    parser.add_argument("--output_dir", default="./output", type=str, help="The output directory where checkpoints/logs will be written.")
+    parser.add_argument("--img_size", default=448, type=int, help="Resolution size")
+    parser.add_argument("--train_batch_size", default=16, type=int, help="Total batch size for training.")
+    parser.add_argument("--eval_batch_size", default=8, type=int, help="Total batch size for eval.")
+    parser.add_argument("--eval_every", default=100, type=int, help="Run prediction on validation set every so many steps. Will always run one evaluation at the end of training.")
+    parser.add_argument("--learning_rate", default=3e-2, type=float, help="The initial learning rate for SGD.")
+    parser.add_argument("--weight_decay", default=0, type=float, help="Weight decay if we apply some.")
+    parser.add_argument("--num_steps", default=10000, type=int, help="Total number of training epochs to perform.")
+    parser.add_argument("--decay_type", choices=["cosine", "linear"], default="cosine", help="How to decay the learning rate.")
+    parser.add_argument("--warmup_steps", default=500, type=int, help="Step of training to perform learning rate warmup for.")
+    parser.add_argument("--max_grad_norm", default=1.0, type=float, help="Max gradient norm.")
+    parser.add_argument("--local_rank", type=int, default=-1, help="local_rank for distributed training on gpus")
+    parser.add_argument("--seed", type=int, default=42, help="random seed for initialization")
+    parser.add_argument("--gradient_accumulation_steps", type=int, default=1, help="Number of updates steps to accumulate before performing a backward/update pass.")
+    parser.add_argument("--smoothing_value", type=float, default=0.0, help="Label smoothing value")
+    parser.add_argument("--split", type=str, default="non-overlap", help="Split method")
+    parser.add_argument("--slide_step", type=int, default=12, help="Slide step for overlap split")
+    parser.add_argument("--num_workers", type=int, default=2, help="DataLoader workers (set 0 for CPU/MPS debugging)")
+    parser.add_argument("--prefer_mps", action="store_true", dest="prefer_mps", help="Prefer Apple MPS backend when available")
+    parser.add_argument("--no-prefer-mps", action="store_false", dest="prefer_mps", help="Disable Apple MPS preference")
+    parser.set_defaults(prefer_mps=True)
+    parser.add_argument("--eval_only", action="store_true", help="Run validation only (no training) using the provided checkpoint")
+    parser.add_argument("--checkpoint", type=str, default=None, help="Path to fine-tuned checkpoint for eval_only or warm start")
+    parser.add_argument("--fiftyone_output", type=str, default=None, help="Path to write FiftyOne-compatible JSONL predictions during eval")
+    parser.add_argument("--tiny_train_subset", type=str, default="", help="Path to tiny train subset (for metadata/env stamp)")
+    parser.add_argument("--tiny_infer_subset", type=str, default="", help="Path to tiny infer subset (for metadata/env stamp)")
 
     args = parser.parse_args()
 
@@ -399,8 +351,7 @@ def main():
     else:
         torch.cuda.set_device(args.local_rank)
         device = torch.device("cuda", args.local_rank)
-        torch.distributed.init_process_group(backend='nccl',
-                                             timeout=timedelta(minutes=60))
+        torch.distributed.init_process_group(backend='nccl', timeout=timedelta(minutes=60))
         args.n_gpu = 1
     args.device = device
     args.nprocs = args.n_gpu if args.n_gpu else 1

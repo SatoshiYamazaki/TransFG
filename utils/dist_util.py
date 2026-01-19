@@ -7,7 +7,7 @@ import random
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Tuple, Callable
 
 import numpy as np
 import torch
@@ -46,6 +46,15 @@ def detect_device(prefer_mps: bool = True) -> torch.device:
     return torch.device("cpu")
 
 
+def map_location_from_device(device: torch.device) -> Callable[[torch.Tensor], torch.Tensor]:
+    """Factory for torch.load(map_location=...) based on resolved device."""
+
+    def _map(storage: torch.Tensor, loc: str) -> torch.Tensor:  # type: ignore[override]
+        return storage.to(device)
+
+    return _map
+
+
 def set_seed_all(seed: int) -> None:
     random.seed(seed)
     np.random.seed(seed)
@@ -54,9 +63,11 @@ def set_seed_all(seed: int) -> None:
         torch.cuda.manual_seed_all(seed)
     if torch.backends.mps.is_available():
         try:
-            import torch.mps  # noqa: F401
+            import importlib
+            importlib.import_module("torch.mps")
         except Exception:
             pass
+    torch.use_deterministic_algorithms(False)
 
 
 def compute_config_hash(args: Mapping[str, Any]) -> str:
@@ -120,6 +131,7 @@ def build_env_stamp(args: Any, device: torch.device) -> dict:
         "timestamp": datetime.utcnow().isoformat() + "Z",
         "fiftyone_version": _safe_version("fiftyone"),
         "torch_build": _torch_build(device),
+        "fp16": False,
     }
     stamp["env_hash"] = hashlib.sha256(
         json.dumps({"python": stamp["python_version"], "requirements_checksum": stamp["requirements_checksum"]}, sort_keys=True).encode("utf-8")

@@ -8,6 +8,8 @@ dependencies:
   - pytorch::pytorch=2.1.2
   - pytorch::torchvision=0.16.2
   - pytorch::torchaudio=2.1.2
+  - numpy=1.26.*
+  - scipy=1.11.*
   - pytest>=7.4.4
   - pip
   - pip:
