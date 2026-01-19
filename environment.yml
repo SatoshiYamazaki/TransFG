@@ -5,12 +5,11 @@ channels:
   - defaults
 dependencies:
   - python=3.10
-  - pytorch::pytorch=2.1.2
-  - pytorch::torchvision=0.16.2
-  - pytorch::torchaudio=2.1.2
-  - numpy=1.26.*
-  - scipy=1.11.*
+  - pytorch::pytorch=2.3.1
+  - pytorch::torchvision=0.18.1
+  - pytorch::torchaudio=2.3.1
+  - numpy=1.26.4
+  - scipy=1.14.*
   - pytest>=7.4.4
-  - pip
   - pip:
       - -r requirements.txt

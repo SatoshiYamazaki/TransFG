@@ -73,8 +73,8 @@
 
 ### Tests for User Story 2 (TDD first)
 
-- [ ] T021 [US2] Add smoke_eval pytest covering eval-only CLI outputs and row counts for flower102 tiny subset in tests/test_smoke.py
-- [ ] T022 [P] [US2] Add missing-checkpoint fail-fast pytest covering map_location/device logging in tests/test_smoke.py
+- [X] T021 [US2] Add smoke_eval pytest covering eval-only CLI outputs and row counts for flower102 tiny subset in tests/test_smoke.py
+- [X] T022 [P] [US2] Add missing-checkpoint fail-fast pytest covering map_location/device logging in tests/test_smoke.py
 
 ### Implementation for User Story 2
 
@@ -95,15 +95,15 @@
 
 ### Tests for User Story 3 (TDD first)
 
-- [ ] T027 [P] [US3] Add env_stamp field completeness pytest covering required keys and fp16=false in tests/test_smoke.py
+- [X] T027 [P] [US3] Add env_stamp field completeness pytest covering required keys and fp16=false in tests/test_smoke.py
 
 ### Implementation for User Story 3
 
-- [ ] T028 [P] [US3] Implement env_stamp builder capturing required fields (config_hash, env_hash, device info, package versions, fp16=false) in utils/dist_util.py
+- [X] T028 [P] [US3] Implement env_stamp builder capturing required fields (config_hash, env_hash, device info, package versions, fp16=false) in utils/dist_util.py
 - [X] T029 [US3] Write env_stamp.json during training runs in train.py using builder and run args
 - [X] T030 [US3] Write env_stamp.json during eval-only runs in eval.py capturing checkpoint and tiny subset info
-- [ ] T031 [P] [US3] Document env hash export/checksum commands in specs/001-implement-base-pipeline/quickstart.md and ensure TDD markers reference them
-- [ ] T032 [P] [US3] Add requirements/env hash validation helper (reads env_export.yml or pip freeze) to utils/dist_util.py and include in env_stamp
+- [X] T031 [P] [US3] Document env hash export/checksum commands in specs/001-implement-base-pipeline/quickstart.md and ensure TDD markers reference them
+- [X] T032 [P] [US3] Add requirements/env hash validation helper (reads env_export.yml or pip freeze) to utils/dist_util.py and include in env_stamp
 
 **Checkpoint**: User Story 3 independently testable via env_stamp inspection
 
@@ -113,7 +113,7 @@
 
 **Purpose**: Hardening and doc alignment
 
-- [ ] T033 Validate quickstart.md commands end-to-end (train + eval) and update README.md snippets accordingly
+- [X] T033 Validate quickstart.md commands end-to-end (train + eval) and update README.md snippets accordingly
 - [ ] T034 Clean up logging/error messages for missing data_root/checkpoint and ensure help text matches contracts/openapi.yaml in train.py and eval.py
 
 ---

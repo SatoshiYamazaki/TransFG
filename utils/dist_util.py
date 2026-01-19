@@ -5,6 +5,7 @@ import os
 import platform
 import random
 import subprocess
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Mapping, Tuple, Callable
@@ -81,6 +82,20 @@ def requirements_checksum(requirements_path: Path) -> str:
     return hashlib.sha256(requirements_path.read_bytes()).hexdigest()
 
 
+def env_export_hash(env_export_path: Path = Path("env_export.yml")) -> str:
+    """Compute a reproducibility hash from env_export.yml or pip freeze fallback."""
+    if env_export_path.exists():
+        try:
+            return hashlib.sha256(env_export_path.read_bytes()).hexdigest()
+        except Exception:
+            pass
+    try:
+        frozen = subprocess.check_output([sys.executable, "-m", "pip", "freeze"], timeout=30)
+        return hashlib.sha256(frozen).hexdigest()
+    except Exception:
+        return "missing"
+
+
 def git_commit_sha() -> str:
     try:
         return subprocess.check_output(["git", "rev-parse", "HEAD"]).decode().strip()
@@ -125,7 +140,7 @@ def build_env_stamp(args: Any, device: torch.device) -> dict:
         "gpu_count": torch.cuda.device_count() if torch.cuda.is_available() else (1 if device.type == "mps" else 0),
         "seed": getattr(args, "seed", 0),
         "requirements_checksum": requirements_checksum(Path("requirements.txt")),
-        "env_hash": "",
+        "env_hash": env_export_hash(),
         "tiny_train_subset_path": getattr(args, "tiny_train_subset", ""),
         "tiny_infer_subset_path": getattr(args, "tiny_infer_subset", ""),
         "timestamp": datetime.utcnow().isoformat() + "Z",
@@ -133,9 +148,6 @@ def build_env_stamp(args: Any, device: torch.device) -> dict:
         "torch_build": _torch_build(device),
         "fp16": False,
     }
-    stamp["env_hash"] = hashlib.sha256(
-        json.dumps({"python": stamp["python_version"], "requirements_checksum": stamp["requirements_checksum"]}, sort_keys=True).encode("utf-8")
-    ).hexdigest()
     return stamp
 
 

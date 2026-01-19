@@ -9,10 +9,10 @@ Official PyTorch code for the paper:  [*TransFG: A Transformer Architecture for 
 
 ![](./TransFG.png)
 
-## Environment (MacBook Air M2 / modern stack)
+## Environment (MacBook Air M2 / fp32)
 
 - Python 3.10+
-- PyTorch 2.x with MPS support (Metal) or CPU
+- PyTorch 2.x with MPS support (Metal) or CPU fallback
 - torchvision 0.16+
 - TensorBoard + FiftyOne for logging/inspection
 
@@ -29,6 +29,13 @@ Or install via pip (arm64 macOS):
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+```
+
+Capture the environment hash for metadata (recommended):
+
+```bash
+conda env export --from-history > env_export.yml
+shasum -a 256 env_export.yml > env_export.sha
 ```
 
 ## Usage
@@ -59,45 +66,41 @@ Install dependencies with the following command:
 pip3 install -r requirements.txt
 ```
 
-### 4. Train (MPS/CPU friendly)
+### 4. Smoke train (flower102 tiny, fp32)
 
-Single-device run on MacBook Air M2 (MPS) for smoke validation (uses synthetic tiny data):
-
-```bash
-python train.py --name smoke_mps --dataset synthetic --model_type testing --img_size 64 \
-  --num_steps 10 --eval_every 5 --train_batch_size 4 --eval_batch_size 2
-```
-
-Full run on real data (update paths accordingly):
+Single-device run on MacBook Air M2 (prefers MPS, falls back to CPU). Uses the flower102 tiny subsets (≤2 batches) for a fast smoke pass:
 
 ```bash
-python train.py --name cub_run --dataset CUB_200_2011 --data_root /path/to/data \
-  --pretrained_dir /path/to/ViT-B_16.npz --num_steps 10000 --eval_every 500 \
-  --train_batch_size 16 --eval_batch_size 8 --amp
+DATA_ROOT=${DATA_ROOT:-/path/to/data}
+python train.py --name flower_mps \
+  --dataset flower102 --data_root "$DATA_ROOT"/flower102 --model_type testing --img_size 64 \
+  --num_steps 10 --eval_every 5 --train_batch_size 4 --eval_batch_size 2 \
+  --output_dir output --prefer_mps \
+  --tiny_train_subset flower102_tiny --tiny_infer_subset flower102_tiny
 ```
 
-TensorBoard logs are written to `output/tb/<run_name>` and a final FiftyOne-compatible
-prediction file to `output/<run_name>/fiftyone/predictions.jsonl`.
+Artifacts: TensorBoard at `output/tb/flower_mps`, predictions at `output/flower_mps/fiftyone/predictions.jsonl`, labelmap at `output/flower_mps/labelmap.json`, env stamp at `output/flower_mps/env_stamp.json`, and retention note at `output/flower_mps/RETENTION.txt`.
 
-### 5. Eval-only / inference with prediction export
+### 5. Eval-only inference with prediction export
 
-Given a fine-tuned checkpoint:
+Run eval-only against an existing checkpoint:
 
 ```bash
-python train.py --name cub_eval --dataset CUB_200_2011 --data_root /path/to/data \
-  --pretrained_dir /path/to/ViT-B_16.npz --checkpoint output/cub_run_checkpoint.bin \
-  --eval_only --eval_batch_size 8
+DATA_ROOT=${DATA_ROOT:-/path/to/data}
+python eval.py --name flower_eval \
+  --dataset flower102 --data_root "$DATA_ROOT"/flower102 --img_size 64 --eval_batch_size 2 \
+  --checkpoint output/flower_mps/checkpoints/ckpt.bin \
+  --output_dir output --prefer_mps --tiny_infer_subset flower102_tiny
 ```
 
-The eval run writes metrics to TensorBoard and predictions to
-`output/cub_eval/fiftyone/predictions.jsonl`.
+Artifacts: TensorBoard at `output/tb/flower_eval`, predictions at `output/flower_eval/fiftyone/predictions.jsonl`, labelmap at `output/flower_eval/labelmap.json`, env stamp at `output/flower_eval/env_stamp.json`, and retention note at `output/flower_eval/RETENTION.txt`.
 
 ### 6. Pytest smoke tests (tiny subsets)
 
-Run the fast smoke suite (≤2 batches/split, synthetic data):
+Run the fast smoke suite (≤2 batches/split):
 
 ```bash
-pytest -m "not slow" tests/test_smoke.py
+pytest -m "smoke or smoke_train or smoke_eval" -q
 ```
 
 ## Citation

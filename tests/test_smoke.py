@@ -1,5 +1,6 @@
 import types
 from pathlib import Path
+import importlib
 
 import pytest
 import torch
@@ -138,3 +139,69 @@ def test_valid_writes_preds_and_labelmap(tmp_path: Path):
     assert len(lines) == 4
     assert "checksum" in label_info
     assert env_stamp["fp16"] is False
+
+
+def test_env_stamp_completeness(tmp_path: Path):
+    args = types.SimpleNamespace(
+        name="env_test",
+        dataset="flower102",
+        tiny_train_subset="flower102_tiny",
+        tiny_infer_subset="flower102_tiny",
+        seed=123,
+    )
+    device = torch.device("cpu")
+    stamp_path = tmp_path / "env_stamp.json"
+    stamp = write_env_stamp(args, stamp_path, device)
+
+    required_keys = {
+        "run_id",
+        "config_hash",
+        "git_commit",
+        "os_version",
+        "python_version",
+        "torch_version",
+        "torchvision_version",
+        "driver_version",
+        "cuda_version",
+        "cudnn_version",
+        "gpu_name",
+        "gpu_count",
+        "seed",
+        "requirements_checksum",
+        "env_hash",
+        "tiny_train_subset_path",
+        "tiny_infer_subset_path",
+        "timestamp",
+        "fiftyone_version",
+        "torch_build",
+        "fp16",
+    }
+    assert required_keys.issubset(stamp.keys())
+    assert stamp["fp16"] is False
+    assert stamp["env_hash"] != "missing"
+    assert stamp["requirements_checksum"] != "missing"
+
+
+def test_eval_missing_checkpoint_fails(monkeypatch, tmp_path: Path):
+    eval_cli = importlib.import_module("eval")
+
+    args = types.SimpleNamespace(
+        name="eval_missing",
+        dataset="flower102",
+        data_root=str(tmp_path),
+        model_type="testing",
+        img_size=32,
+        eval_batch_size=2,
+        tiny_infer_subset="flower102_tiny",
+        tiny_train_subset="",
+        prefer_mps=False,
+        checkpoint=str(tmp_path / "missing.ckpt"),
+        output_dir=str(tmp_path),
+        fiftyone_output=None,
+        num_workers=0,
+    )
+
+    monkeypatch.setattr(eval_cli, "parse_args", lambda: args)
+
+    with pytest.raises(FileNotFoundError):
+        eval_cli.main()

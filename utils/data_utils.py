@@ -1,6 +1,7 @@
 import logging
 import os
 import random
+from functools import partial
 from pathlib import Path
 from typing import Tuple, List
 
@@ -8,10 +9,9 @@ import torch
 from PIL import Image
 from torch.utils.data import DataLoader, DistributedSampler, RandomSampler, SequentialSampler, Dataset, Subset
 from torchvision import transforms
-from torchvision.datasets import Flowers102
 
 from .autoaugment import AutoAugImageNetPolicy
-from .dataset import CUB, CarsDataset, NABirds, dogs, INat2017
+from .dataset import CUB, CarsDataset, NABirds, dogs, INat2017, Flowers102
 from .dist_util import set_seed_all
 
 logger = logging.getLogger(__name__)
@@ -37,10 +37,9 @@ class SyntheticDataset(Dataset):
         return image, label
 
 
-def make_worker_init_fn(seed: int):
-    def _init_fn(worker_id: int):
-        set_seed_all(seed + worker_id)
-    return _init_fn
+def worker_init_fn(worker_id: int, base_seed: int) -> None:
+    """Top-level worker init to keep picklable under spawn context."""
+    set_seed_all(base_seed + worker_id)
 
 
 def maybe_limit_subset(dataset: Dataset, max_items: int) -> Dataset:
@@ -69,7 +68,8 @@ def get_loader(args):
 
     num_workers = getattr(args, "num_workers", 2)
 
-    worker_init = make_worker_init_fn(getattr(args, "seed", 42))
+    base_seed = getattr(args, "seed", 42)
+    worker_init = partial(worker_init_fn, base_seed=base_seed)
 
     if args.dataset == 'CUB_200_2011':
         train_transform=transforms.Compose([transforms.Resize((600, 600), Image.BILINEAR),
@@ -153,7 +153,7 @@ def get_loader(args):
                                     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])])
         trainset = INat2017(args.data_root, 'train', train_transform)
         testset = INat2017(args.data_root, 'val', test_transform)
-    elif args.dataset == 'flower102':
+    elif args.dataset == 'flowers-102':
         norm = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         train_transform = transforms.Compose([
             transforms.Resize((args.img_size, args.img_size), interpolation=Image.BILINEAR),
@@ -169,9 +169,9 @@ def get_loader(args):
         trainset = Flowers102(root=args.data_root, split="train", download=False, transform=train_transform)
         testset = Flowers102(root=args.data_root, split="val", download=False, transform=test_transform)
 
-        if getattr(args, "tiny_train_subset", "") == "flower102_tiny":
+        if getattr(args, "tiny_train_subset", "") == "flowers102_tiny":
             trainset = maybe_limit_subset(trainset, args.train_batch_size * 2)
-        if getattr(args, "tiny_infer_subset", "") == "flower102_tiny":
+        if getattr(args, "tiny_infer_subset", "") == "flowers102_tiny":
             testset = maybe_limit_subset(testset, args.eval_batch_size * 2)
     elif args.dataset == 'synthetic':
         trainset = SyntheticDataset(length=16, num_classes=4, image_size=(args.img_size, args.img_size))

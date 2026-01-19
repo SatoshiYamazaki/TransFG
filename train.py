@@ -85,13 +85,13 @@ def setup(args):
         num_classes = 5089
     elif args.dataset == "synthetic":
         num_classes = 4
-    elif args.dataset == "flower102":
+    elif args.dataset == "flowers-102":
         num_classes = 102
     else:
         raise ValueError(f"Unknown dataset {args.dataset}")
 
     args.num_classes = num_classes
-
+    
     model = VisionTransformer(config, args.img_size, zero_head=True, num_classes=num_classes,                                                   smoothing_value=args.smoothing_value)
 
     if args.pretrained_dir and os.path.exists(args.pretrained_dir):
@@ -196,7 +196,7 @@ def train(args, model):
     if num_classes is None:
         num_classes = getattr(getattr(model, "classifier", None), "out_features", None)
     if num_classes is None:
-        num_classes = 102 if args.dataset == "flower102" else 1
+        num_classes = 102 if args.dataset == "flowers-102" else 1
     args.num_classes = num_classes
 
     if args.local_rank in [-1, 0]:
@@ -336,7 +336,7 @@ def train(args, model):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--name", required=True, help="Name of this run. Used for monitoring.")
-    parser.add_argument("--dataset", choices=["flower102", "CUB_200_2011", "car", "dog", "nabirds", "INat2017", "synthetic"], default="flower102", help="Which dataset.")
+    parser.add_argument("--dataset", choices=["flowers-102", "CUB_200_2011", "car", "dog", "nabirds", "INat2017", "synthetic"], default="flowers-102", help="Which dataset.")
     default_data_root = os.environ.get("DATA_ROOT", "./data")
     parser.add_argument("--data_root", type=str, default=default_data_root, help="Root directory containing datasets; synthetic ignores this path.")
     parser.add_argument("--model_type", choices=["ViT-B_16", "ViT-B_32", "ViT-L_16", "ViT-L_32", "ViT-H_14", "testing"], default="ViT-B_16", help="Which variant to use.")
@@ -397,6 +397,7 @@ def main():
                         level=logging.INFO if args.local_rank in [-1, 0] else logging.WARN)
     logger.warning("Process rank: %s, device: %s, n_gpu: %s, distributed training: %s" %
                    (args.local_rank, args.device, args.n_gpu, bool(args.local_rank != -1)))
+    logger.info("Training/evaluation parameters %s", args)
 
     # Set seed
     set_seed_all(args.seed)

@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 import torch
 from torch.utils.data import Dataset
 from torchvision.datasets import VisionDataset
+from torchvision.datasets import Flowers102 as TorchFlowers102
 from torchvision.datasets.folder import default_loader
 from torchvision.datasets.utils import download_url, list_dir, check_integrity, extract_archive, verify_str_arg
 
@@ -33,6 +34,23 @@ def write_labelmap(labels: List[str], path: Path) -> dict:
 def default_labels_for_dataset(dataset_name: str, num_classes: int) -> List[str]:
     """Fallback labels when dataset class names are unavailable."""
     return [f"{dataset_name}_class_{i}" for i in range(num_classes)]
+
+
+class Flowers102(VisionDataset):
+    """Thin wrapper around torchvision Flowers102 to align with our splits."""
+
+    def __init__(self, root: str, split: str = "train", transform=None, download: bool = False):
+        super().__init__(root=root, transform=transform)
+        self._dataset = TorchFlowers102(root=root, split=split, download=download)
+
+    def __len__(self) -> int:  # pragma: no cover - thin wrapper
+        return len(self._dataset)
+
+    def __getitem__(self, index: int):
+        image, target = self._dataset[index]
+        if self.transform is not None:
+            image = self.transform(image)
+        return image, target
 
 class CUB():
     def __init__(self, root, is_train=True, data_len=None, transform=None):

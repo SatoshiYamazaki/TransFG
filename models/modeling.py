@@ -237,6 +237,8 @@ class Part_Attention(nn.Module):
         super(Part_Attention, self).__init__()
 
     def forward(self, x):
+        if len(x) == 0:
+            raise ValueError("Part_Attention received no attention maps; ensure num_layers>1 or handle upstream.")
         length = len(x)
         last_map = x[0]
         for i in range(1, length):
@@ -262,6 +264,10 @@ class Encoder(nn.Module):
         for layer in self.layer:
             hidden_states, weights = layer(hidden_states)
             attn_weights.append(weights)            
+        if len(attn_weights) == 0:
+            # Minimal configs (e.g., testing) skip encoder blocks; return normalized embeddings
+            return self.part_norm(hidden_states)
+
         part_num, part_inx = self.part_select(attn_weights)
         part_inx = part_inx + 1
         parts = []

@@ -13,7 +13,11 @@ __pycache__/
 .venv/
 venv/
 .env/
+.env
+.env.*
 .pytest_cache/
+coverage/
+.coverage
 
 # Packaging / build
 build/
@@ -33,3 +37,4 @@ dist/
 # Project outputs (artifacts)
 output/
 output/*/checkpoints/
+output*/
