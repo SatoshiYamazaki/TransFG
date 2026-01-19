@@ -32,3 +32,14 @@
 ## Notes
 
 - Revalidated after removing AMP references and separating the eval-only entrypoint from training (2026-01-19); all checklist items remain complete. Proceed to `/speckit.plan` when ready.
+
+## Retention Note Template (RETENTION.txt)
+
+Include this text alongside run outputs (e.g., `output/<run>/RETENTION.txt`):
+
+```
+Retention: 90 days minimum
+Location: output/<run>/
+Artifacts: TensorBoard logs, FiftyOne predictions, env_stamp.json
+Notes: Checkpoints are not committed; delete after TTL unless extended.
+```

@@ -1,15 +1,18 @@
 import logging
 import os
 import random
-from typing import Tuple
+from pathlib import Path
+from typing import Tuple, List
 
 import torch
 from PIL import Image
-from torch.utils.data import DataLoader, DistributedSampler, RandomSampler, SequentialSampler, Dataset
+from torch.utils.data import DataLoader, DistributedSampler, RandomSampler, SequentialSampler, Dataset, Subset
 from torchvision import transforms
+from torchvision.datasets import Flowers102
 
 from .autoaugment import AutoAugImageNetPolicy
 from .dataset import CUB, CarsDataset, NABirds, dogs, INat2017
+from .dist_util import set_seed_all
 
 logger = logging.getLogger(__name__)
 
@@ -34,11 +37,39 @@ class SyntheticDataset(Dataset):
         return image, label
 
 
+def make_worker_init_fn(seed: int):
+    def _init_fn(worker_id: int):
+        set_seed_all(seed + worker_id)
+    return _init_fn
+
+
+def maybe_limit_subset(dataset: Dataset, max_items: int) -> Dataset:
+    if max_items is None or max_items <= 0:
+        return dataset
+    return Subset(dataset, list(range(min(len(dataset), max_items))))
+
+
+def build_output_paths(output_dir: str, run_name: str) -> dict:
+    base = Path(output_dir)
+    run_dir = base / run_name
+    return {
+        "run_dir": run_dir,
+        "tb_dir": base / "tb" / run_name,
+        "fiftyone_path": run_dir / "fiftyone" / "predictions.jsonl",
+        "labelmap_path": run_dir / "labelmap.json",
+        "checkpoints_dir": run_dir / "checkpoints",
+        "env_stamp_path": run_dir / "env_stamp.json",
+        "retention_path": run_dir / "RETENTION.txt",
+    }
+
+
 def get_loader(args):
     if args.local_rank not in [-1, 0]:
         torch.distributed.barrier()
 
     num_workers = getattr(args, "num_workers", 2)
+
+    worker_init = make_worker_init_fn(getattr(args, "seed", 42))
 
     if args.dataset == 'CUB_200_2011':
         train_transform=transforms.Compose([transforms.Resize((600, 600), Image.BILINEAR),
@@ -122,6 +153,26 @@ def get_loader(args):
                                     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])])
         trainset = INat2017(args.data_root, 'train', train_transform)
         testset = INat2017(args.data_root, 'val', test_transform)
+    elif args.dataset == 'flower102':
+        norm = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        train_transform = transforms.Compose([
+            transforms.Resize((args.img_size, args.img_size), interpolation=Image.BILINEAR),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            norm,
+        ])
+        test_transform = transforms.Compose([
+            transforms.Resize((args.img_size, args.img_size), interpolation=Image.BILINEAR),
+            transforms.ToTensor(),
+            norm,
+        ])
+        trainset = Flowers102(root=args.data_root, split="train", download=False, transform=train_transform)
+        testset = Flowers102(root=args.data_root, split="val", download=False, transform=test_transform)
+
+        if getattr(args, "tiny_train_subset", "") == "flower102_tiny":
+            trainset = maybe_limit_subset(trainset, args.train_batch_size * 2)
+        if getattr(args, "tiny_infer_subset", "") == "flower102_tiny":
+            testset = maybe_limit_subset(testset, args.eval_batch_size * 2)
     elif args.dataset == 'synthetic':
         trainset = SyntheticDataset(length=16, num_classes=4, image_size=(args.img_size, args.img_size))
         testset = SyntheticDataset(length=8, num_classes=4, image_size=(args.img_size, args.img_size))
@@ -137,12 +188,14 @@ def get_loader(args):
                               sampler=train_sampler,
                               batch_size=args.train_batch_size,
                               num_workers=num_workers,
+                              worker_init_fn=worker_init,
                               drop_last=True,
                               pin_memory=False)
     test_loader = DataLoader(testset,
                              sampler=test_sampler,
                              batch_size=args.eval_batch_size,
                              num_workers=num_workers,
+                             worker_init_fn=worker_init,
                              pin_memory=False) if testset is not None else None
 
     return train_loader, test_loader

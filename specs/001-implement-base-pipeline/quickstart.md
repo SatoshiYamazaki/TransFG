@@ -3,12 +3,14 @@
 ## Environment
 1) Create env (conda recommended):
 ```
-conda env create -f environment.yml  # or: python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
+conda env create -f environment.yml
+conda activate transfg-mps
 ```
-2) Capture env hash for metadata:
+  - Alternative: `python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt`
+2) Capture env hash for metadata (commit env_export.yml + env_export.sha):
 ```
 conda env export --from-history > env_export.yml
-sha256sum env_export.yml > env_export.sha
+shasum -a 256 env_export.yml > env_export.sha
 ```
 
 ## Tests (TDD first)
@@ -16,6 +18,14 @@ sha256sum env_export.yml > env_export.sha
 ```
 pytest -m "smoke or smoke_train or smoke_eval" -q
 ```
+
+## FiftyOne readiness check (optional but recommended)
+```
+python scripts/check_fiftyone.py
+# with COCO validation probe (if present locally):
+python scripts/check_fiftyone.py --coco-dir /Users/<you>/fiftyone/coco-2017/validation
+```
+The script prints a JSON report and exits non-zero on failure.
 
 ## Tiny Training (fp32, M2)
 ```

@@ -1,2 +1,35 @@
 # Local overrides
 .special_env
+
+# Python build/cache artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Virtual environments
+.venv/
+venv/
+.env/
+.pytest_cache/
+
+# Packaging / build
+build/
+dist/
+*.egg-info/
+
+# Editors
+.vscode/
+.idea/
+
+# Logs and temps
+*.log
+*.tmp
+*.swp
+.DS_Store
+
+# Project outputs (artifacts)
+output/
+output/*/checkpoints/

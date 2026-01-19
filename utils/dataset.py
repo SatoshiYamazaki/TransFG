@@ -1,6 +1,8 @@
 import os
 import json
 from os.path import join
+from pathlib import Path
+from typing import List
 
 import numpy as np
 import scipy
@@ -15,6 +17,13 @@ from torch.utils.data import Dataset
 from torchvision.datasets import VisionDataset
 from torchvision.datasets.folder import default_loader
 from torchvision.datasets.utils import download_url, list_dir, check_integrity, extract_archive, verify_str_arg
+
+
+def write_labelmap(labels: List[str], path: Path) -> dict:
+    mapping = {str(i): label for i, label in enumerate(labels)}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(mapping, indent=2))
+    return mapping
 
 class CUB():
     def __init__(self, root, is_train=True, data_len=None, transform=None):

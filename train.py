@@ -2,13 +2,9 @@
 from __future__ import absolute_import, division, print_function
 
 import argparse
-import hashlib
 import json
 import logging
 import os
-import platform
-import random
-import subprocess
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -23,8 +19,8 @@ from tqdm import tqdm
 
 from models.modeling import VisionTransformer, CONFIGS
 from utils.scheduler import WarmupLinearSchedule, WarmupCosineSchedule
-from utils.data_utils import get_loader
-from utils.dist_util import get_world_size
+from utils.data_utils import get_loader, build_output_paths
+from utils.dist_util import get_world_size, detect_device, set_seed_all, write_env_stamp
 
 logger = logging.getLogger(__name__)
 
@@ -64,75 +60,6 @@ def save_model(args, model):
     logger.info("Saved model checkpoint to [DIR: %s]", args.output_dir)
 
 
-def _compute_config_hash(args: argparse.Namespace) -> str:
-    args_dict = vars(args).copy()
-    args_json = json.dumps(args_dict, sort_keys=True, default=str).encode("utf-8")
-    return hashlib.sha256(args_json).hexdigest()
-
-
-def _compute_requirements_checksum(requirements_path: Path) -> str:
-    if not requirements_path.exists():
-        return "missing"
-    return hashlib.sha256(requirements_path.read_bytes()).hexdigest()
-
-
-def _git_commit_sha() -> str:
-    try:
-        return subprocess.check_output(["git", "rev-parse", "HEAD"]).decode().strip()
-    except Exception:
-        return "unknown"
-
-
-def write_env_stamp(args: argparse.Namespace, stamp_path: Path) -> Dict[str, Any]:
-    stamp_path.parent.mkdir(parents=True, exist_ok=True)
-    def _safe_version(pkg_name: str) -> str:
-        try:
-            module = __import__(pkg_name)
-            return getattr(module, "__version__", "unknown")
-        except Exception:
-            return "missing"
-
-    def _get_torch_build(device: torch.device) -> str:
-        if device.type == "cuda":
-            return f"cuda-{torch.version.cuda or 'unknown'}"
-        if device.type == "mps":
-            return "mps"
-        return "cpu"
-
-    try:
-        import torchvision  # pylint: disable=import-outside-toplevel
-        tv_version = torchvision.__version__
-    except Exception:
-        tv_version = "unknown"
-
-    stamp = {
-        "run_id": args.name,
-        "config_hash": _compute_config_hash(args),
-        "git_commit": _git_commit_sha(),
-        "os_version": platform.platform(),
-        "python_version": platform.python_version(),
-        "torch_version": torch.__version__,
-        "torchvision_version": tv_version,
-        "ml_collections_version": _safe_version("ml_collections"),
-        "driver_version": "mps" if args.device.type == "mps" else (torch.version.cuda or "cpu"),
-        "cuda_version": torch.version.cuda or "none",
-        "cudnn_version": torch.backends.cudnn.version() if torch.backends.cudnn.is_available() else "none",
-        "gpu_name": torch.cuda.get_device_name(0) if torch.cuda.is_available() else ("mps" if args.device.type == "mps" else "cpu"),
-        "gpu_count": torch.cuda.device_count() if torch.cuda.is_available() else (1 if args.device.type == "mps" else 0),
-        "seed": args.seed,
-        "requirements_checksum": _compute_requirements_checksum(Path("requirements.txt")),
-        "env_hash": "",
-        "tiny_train_subset_path": getattr(args, "tiny_train_subset", ""),
-        "tiny_infer_subset_path": getattr(args, "tiny_infer_subset", ""),
-        "timestamp": datetime.utcnow().isoformat() + "Z",
-        "fiftyone_version": _safe_version("fiftyone"),
-        "torch_build": _get_torch_build(args.device),
-    }
-    stamp["env_hash"] = hashlib.sha256(json.dumps({"python": stamp["python_version"], "requirements_checksum": stamp["requirements_checksum"]}, sort_keys=True).encode("utf-8")).hexdigest()
-    stamp_path.write_text(json.dumps(stamp, indent=2))
-    logger.info("Wrote env stamp to %s", stamp_path)
-    return stamp
-
 def setup(args):
     # Prepare model
     config = CONFIGS[args.model_type]
@@ -151,6 +78,8 @@ def setup(args):
         num_classes = 5089
     elif args.dataset == "synthetic":
         num_classes = 4
+    elif args.dataset == "flower102":
+        num_classes = 102
     else:
         raise ValueError(f"Unknown dataset {args.dataset}")
 
@@ -177,21 +106,6 @@ def setup(args):
 def count_parameters(model):
     params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     return params/1000000
-
-def set_seed(args):
-    random.seed(args.seed)
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(args.seed)
-
-
-def detect_device(prefer_mps: bool = True):
-    if prefer_mps and torch.backends.mps.is_available():
-        return torch.device("mps")
-    if torch.cuda.is_available():
-        return torch.device("cuda")
-    return torch.device("cpu")
 
 def valid(args, model, writer, test_loader, global_step, fiftyone_path: Optional[Path] = None):
     # Validation!
@@ -274,8 +188,8 @@ def train(args, model):
     """ Train the model """
     if args.local_rank in [-1, 0]:
         os.makedirs(args.output_dir, exist_ok=True)
-    tb_dir = os.path.join(args.output_dir, "tb", args.name)
-    writer = SummaryWriter(log_dir=tb_dir)
+    paths = build_output_paths(args.output_dir, args.name)
+    writer = SummaryWriter(log_dir=str(paths["tb_dir"]))
 
     args.train_batch_size = args.train_batch_size // args.gradient_accumulation_steps
 
@@ -399,10 +313,11 @@ def main():
         # Required parameters
         parser.add_argument("--name", required=True,
                         help="Name of this run. Used for monitoring.")
-        parser.add_argument("--dataset", choices=["CUB_200_2011", "car", "dog", "nabirds", "INat2017", "synthetic"], default="CUB_200_2011",
+    parser.add_argument("--dataset", choices=["flower102", "CUB_200_2011", "car", "dog", "nabirds", "INat2017", "synthetic"], default="flower102",
                         help="Which dataset.")
-        parser.add_argument('--data_root', type=str, default='./data',
-                        help="Root directory containing datasets; synthetic ignores this path.")
+    default_data_root = os.environ.get("DATA_ROOT", "./data")
+    parser.add_argument('--data_root', type=str, default=default_data_root,
+            help="Root directory containing datasets; synthetic ignores this path.")
         parser.add_argument("--model_type", choices=["ViT-B_16", "ViT-B_32", "ViT-L_16",
                                             "ViT-L_32", "ViT-H_14", "testing"],
                         default="ViT-B_16",
@@ -469,10 +384,14 @@ def main():
 
     args = parser.parse_args()
 
+    paths = build_output_paths(args.output_dir, args.name)
     if args.fiftyone_output is None:
-        args.fiftyone_output = str(Path(args.output_dir) / args.name / "fiftyone" / "predictions.jsonl")
+        args.fiftyone_output = str(paths["fiftyone_path"])
 
-    args.data_root = '{}/{}'.format(args.data_root, args.dataset) if args.dataset != "synthetic" else args.data_root
+    data_root = Path(args.data_root)
+    if args.dataset != "synthetic" and data_root.name != args.dataset:
+        data_root = data_root / args.dataset
+    args.data_root = str(data_root)
 
     if args.local_rank == -1:
         device = detect_device(prefer_mps=args.prefer_mps)
@@ -494,7 +413,7 @@ def main():
                    (args.local_rank, args.device, args.n_gpu, bool(args.local_rank != -1)))
 
     # Set seed
-    set_seed(args)
+    set_seed_all(args.seed)
 
     # Model Setup
     args, model = setup(args)
@@ -505,8 +424,8 @@ def main():
         model.load_state_dict(state_dict)
         logger.info("Loaded fine-tuned checkpoint from %s", args.checkpoint)
 
-    stamp_path = Path(args.output_dir) / args.name / "env_stamp.json"
-    write_env_stamp(args, stamp_path)
+    stamp_path = paths["env_stamp_path"]
+    write_env_stamp(args, stamp_path, args.device)
 
     # Training only
     train(args, model)

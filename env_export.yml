@@ -1,14 +1,10 @@
 name: transfg-mps
 channels:
-  - pytorch
-  - conda-forge
   - defaults
 dependencies:
   - python=3.10
+  - pip
+  - pytorch::torchaudio=2.1.2
   - pytorch::pytorch=2.1.2
   - pytorch::torchvision=0.16.2
-  - pytorch::torchaudio=2.1.2
-  - pytest>=7.4.4
-  - pip
-  - pip:
-      - -r requirements.txt
+prefix: /opt/miniconda3/envs/transfg-mps
