@@ -7,6 +7,8 @@
 
 ## User Scenarios & Testing *(mandatory)*
 
+Tests and smoke validations MUST be runnable via pytest (e.g., markers for tiny train/infer subsets ≤2 batches/split). Document the exact pytest commands expected to exercise each user story on the MacBook Air M2 (arm64, CPU/MPS) environment.
+
 <!--
   IMPORTANT: User stories should be PRIORITIZED as user journeys ordered by importance.
   Each user story/journey must be INDEPENDENTLY TESTABLE - meaning if you implement just ONE of them,
@@ -80,18 +82,9 @@
 <!--
   ACTION REQUIRED: The content in this section represents placeholders.
   Fill them out with the right functional requirements.
--->
 
 ### Constitution Alignment
 
-- State dataset source, license, and split to be used (restricted to listed public datasets).
-- Note config file path and seed strategy for reproducibility.
-- Define expected evaluation metrics (top-1 accuracy, loss) and image resolution.
-- Describe the smoke-test plan on a tiny subset before full training.
-- List variant factors (ViT size, backbone source/commit, part attention toggle, patch/resolution) and how preprocessing/normalization will stay consistent for comparisons.
-- Define linear-probe baselines per backbone (frozen encoder, linear head), including commands, normalization, and where results will be reported relative to finetune runs.
-- Declare miniconda environment name/export file used for experiments.
-- State TensorBoard logging path and scalars to monitor; define expected FiftyOne inference artifact format/location and linkage to checkpoints.
 
 ### Functional Requirements
 

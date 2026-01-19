@@ -1,0 +1,141 @@
+openapi: 3.0.0
+info:
+  title: TransFG Mac M2 Baseline CLI Contract
+  version: 0.1.0
+servers:
+  - url: local-cli
+    description: Invoked via python scripts (train.py, eval.py) on Mac M2
+paths:
+  /train:
+    post:
+      summary: Tiny training run with TensorBoard and FiftyOne outputs (fp32)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, dataset, model_type, img_size, num_steps, eval_every, train_batch_size, eval_batch_size]
+              properties:
+                name:
+                  type: string
+                  example: smoke_mps
+                dataset:
+                  type: string
+                  enum: [flower102, synthetic, CUB_200_2011, car, dog, nabirds, INat2017]
+                  example: flower102
+                data_root:
+                  type: string
+                  example: ./data
+                model_type:
+                  type: string
+                  enum: [ViT-B_16, ViT-B_32, ViT-L_16, ViT-L_32, ViT-H_14, testing]
+                img_size:
+                  type: integer
+                  example: 64
+                num_steps:
+                  type: integer
+                  example: 10
+                eval_every:
+                  type: integer
+                  example: 5
+                train_batch_size:
+                  type: integer
+                  example: 4
+                eval_batch_size:
+                  type: integer
+                  example: 2
+                prefer_mps:
+                  type: boolean
+                  default: true
+                tiny_train_subset:
+                  type: string
+                  example: synthetic
+                tiny_infer_subset:
+                  type: string
+                  example: synthetic
+                output_dir:
+                  type: string
+                  example: output
+              description: Mirrors CLI flags for train.py
+      responses:
+        '200':
+          description: Run accepted; artifacts written locally
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  env_stamp:
+                    type: string
+                    example: output/smoke_mps/env_stamp.json
+                  tensorboard:
+                    type: string
+                    example: output/tb/smoke_mps
+                  fiftyone_predictions:
+                    type: string
+                    example: output/smoke_mps/fiftyone/predictions.jsonl
+  /eval:
+    post:
+      summary: Eval-only inference using existing checkpoint
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, dataset, checkpoint, eval_batch_size]
+              properties:
+                name:
+                  type: string
+                  example: cub_eval
+                dataset:
+                  type: string
+                  enum: [flower102, synthetic, CUB_200_2011, car, dog, nabirds, INat2017]
+                  example: flower102
+                data_root:
+                  type: string
+                  example: ./data
+                model_type:
+                  type: string
+                  enum: [ViT-B_16, ViT-B_32, ViT-L_16, ViT-L_32, ViT-H_14, testing]
+                  example: testing
+                img_size:
+                  type: integer
+                  example: 64
+                eval_batch_size:
+                  type: integer
+                  example: 2
+                checkpoint:
+                  type: string
+                  example: output/smoke_mps/checkpoints/ckpt.bin
+                prefer_mps:
+                  type: boolean
+                  default: true
+                tiny_infer_subset:
+                  type: string
+                  example: synthetic
+                fiftyone_output:
+                  type: string
+                  example: output/cub_eval/fiftyone/predictions.jsonl
+                output_dir:
+                  type: string
+                  example: output
+              description: Mirrors CLI flags for eval.py
+      responses:
+        '200':
+          description: Eval completed; artifacts written locally
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  env_stamp:
+                    type: string
+                    example: output/cub_eval/env_stamp.json
+                  tensorboard:
+                    type: string
+                    example: output/tb/cub_eval
+                  fiftyone_predictions:
+                    type: string
+                    example: output/cub_eval/fiftyone/predictions.jsonl

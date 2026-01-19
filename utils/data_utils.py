@@ -1,21 +1,44 @@
 import logging
-from PIL import Image
 import os
+import random
+from typing import Tuple
 
 import torch
-
+from PIL import Image
+from torch.utils.data import DataLoader, DistributedSampler, RandomSampler, SequentialSampler, Dataset
 from torchvision import transforms
-from torch.utils.data import DataLoader, RandomSampler, DistributedSampler, SequentialSampler
 
-from .dataset import CUB, CarsDataset, NABirds, dogs, INat2017
 from .autoaugment import AutoAugImageNetPolicy
+from .dataset import CUB, CarsDataset, NABirds, dogs, INat2017
 
 logger = logging.getLogger(__name__)
+
+
+class SyntheticDataset(Dataset):
+    """Tiny synthetic dataset for smoke tests on CPU/MPS."""
+
+    def __init__(self, length: int = 16, num_classes: int = 3, image_size: Tuple[int, int] = (224, 224)):
+        super().__init__()
+        self.length = length
+        self.num_classes = num_classes
+        self.image_size = image_size
+
+    def __len__(self):
+        return self.length
+
+    def __getitem__(self, idx):
+        h, w = self.image_size
+        torch.manual_seed(idx)
+        image = torch.rand(3, h, w)
+        label = torch.randint(low=0, high=self.num_classes, size=(1,)).item()
+        return image, label
 
 
 def get_loader(args):
     if args.local_rank not in [-1, 0]:
         torch.distributed.barrier()
+
+    num_workers = getattr(args, "num_workers", 2)
 
     if args.dataset == 'CUB_200_2011':
         train_transform=transforms.Compose([transforms.Resize((600, 600), Image.BILINEAR),
@@ -99,6 +122,11 @@ def get_loader(args):
                                     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])])
         trainset = INat2017(args.data_root, 'train', train_transform)
         testset = INat2017(args.data_root, 'val', test_transform)
+    elif args.dataset == 'synthetic':
+        trainset = SyntheticDataset(length=16, num_classes=4, image_size=(args.img_size, args.img_size))
+        testset = SyntheticDataset(length=8, num_classes=4, image_size=(args.img_size, args.img_size))
+    else:
+        raise ValueError(f"Unsupported dataset: {args.dataset}")
 
     if args.local_rank == 0:
         torch.distributed.barrier()
@@ -108,13 +136,13 @@ def get_loader(args):
     train_loader = DataLoader(trainset,
                               sampler=train_sampler,
                               batch_size=args.train_batch_size,
-                              num_workers=4,
+                              num_workers=num_workers,
                               drop_last=True,
-                              pin_memory=True)
+                              pin_memory=False)
     test_loader = DataLoader(testset,
                              sampler=test_sampler,
                              batch_size=args.eval_batch_size,
-                             num_workers=4,
-                             pin_memory=True) if testset is not None else None
+                             num_workers=num_workers,
+                             pin_memory=False) if testset is not None else None
 
     return train_loader, test_loader

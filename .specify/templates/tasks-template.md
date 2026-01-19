@@ -8,7 +8,7 @@ description: "Task list template for feature implementation"
 **Input**: Design documents from `/specs/[###-feature-name]/`
 **Prerequisites**: plan.md (required), spec.md (required for user stories), research.md, data-model.md, contracts/
 
-**Tests**: The examples below include test tasks. Tests are OPTIONAL - only include them if explicitly requested in the feature specification.
+**Tests**: The examples below include test tasks. Tests are OPTIONAL - only include them if explicitly requested in the feature specification. When included, tests and smoke validations MUST be runnable via pytest on MacBook Air M2 (arm64, CPU/MPS).
 
 **Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
 
@@ -53,14 +53,28 @@ description: "Task list template for feature implementation"
 - [ ] T003 [P] Configure linting and formatting tools
 - [ ] T004 Document dataset source and license (from allowed public datasets) in specs/[###-feature]/plan.md
 - [ ] T005 Capture baseline training/eval command, config path, seeds, and output directories for reproducibility
-- [ ] T006 Create a smoke-test target that runs 2 batches per split (respects FP16/distributed flags)
-- [ ] T007 Define variant matrix (ViT size, backbone: CLIP/SigLIP2/DINOv2, part attention on/off, patch/resolution) mapped to configs
+- [ ] T006 Create pytest smoke-test targets that run ≤2 batches per split (respect FP16/distributed flags) using the tiny training subset and tiny inference subset; keep paths and checksums documented in spec; commands MUST run on MacBook Air M2 (CPU/MPS, no CUDA assumed)
+- [ ] T007 Define variant matrix (ViT size, backbone: CLIP/SigLIP2/DINOv2, part attention on/off, patch/resolution) mapped to configs; block modern backbones unless upgraded stack (Python/PyTorch/extra libs), README/requirements updates, and a recorded TensorBoard+FiftyOne validation command/output are declared and checked into the repo (script/target)
 - [ ] T008 Document preprocessing/normalization choices per backbone to ensure fair comparisons
 - [ ] T009 Plan linear-probe baselines per backbone (frozen encoder, linear head) with commands/configs and reporting target
 - [ ] T010 Execute and record linear-probe baselines before/alongside finetune runs
-- [ ] T011 Capture miniconda environment export (environment.yml or conda env export) for reproducibility
+- [ ] T011 Capture miniconda environment export (environment.yml or conda env export) for reproducibility, store env hash and requirements.txt checksum
 - [ ] T012 Configure TensorBoard logging path/keys and ensure runs write scalars
 - [ ] T013 Define storage path/format for FiftyOne-ready inference artifacts and link to checkpoints/configs
+- [ ] T014 Define stable output path schema (e.g., outputs/{run_id}/{config_hash}/{checkpoint_id}/tb and /fiftyone) and apply to planned runs
+- [ ] T015 Specify baseline metrics artifact format (CSV/JSON) with required fields and storage path
+- [ ] T016 Plan label mapping/order validation steps for each dataset/backbone combo
+- [ ] T017 List system/env metadata to capture per run (os_version, git_commit, config_hash, GPU/MPS model/count, CUDA/cuDNN or MPS driver, key package versions)
+- [ ] T018 Record env hash from conda export and store alongside run metadata, with requirements.txt checksum; define config_hash as SHA256 of resolved config contents, store env stamp at the metadata path declared in spec, and cite in PRs
+- [ ] T018 Record env hash from conda export and store alongside run metadata, with requirements.txt checksum; define config_hash as SHA256 of resolved config contents, store env stamp JSON with canonical fields (run_id, config_hash, git_commit, os_version, python_version, torch_version, torchvision_version, ml_collections_version, driver_version, cuda_version, cudnn_version, gpu_name, gpu_count, fp16, seed, requirements_checksum, env_hash, tiny_train_subset_path, tiny_infer_subset_path) at the metadata path declared in spec, and cite in PRs with an excerpt
+- [ ] T019 Define retention/TTL and required contents for TensorBoard/FiftyOne artifacts (per-class metrics, confusion matrix, top-k, misclassifications) and how retention evidence/TTL will be recorded in PRs (TTL policy link or storage path with expiry note)
+- [ ] T020 Plan minimal eval sanity check (single-batch eval), ensure tests are added/updated before implementation (TDD) as pytest tests, and include tiny train/inference smoke commands with expected runtime and label coverage (runnable on MacBook Air M2 CPU/MPS)
+- [ ] T021 Document approval/license review if introducing new/synthetic datasets
+- [ ] T022 Record requirements.txt checksum and include python_version and ml_collections_version in metadata plan
+- [ ] T023 Ensure baseline artifact includes per-class metrics (e.g., macro-F1 or per-class accuracy)
+- [ ] T024 Define label-map artifact path (outputs/{run_id}/{config_hash}/{checkpoint_id}/labelmap.json) and checksum logging
+- [ ] T025 Set minimum retention window (≥90 days) for TensorBoard/FiftyOne artifacts and baseline tables (unless release policy requires longer)
+- [ ] T026 Define checkpoint handling: specify external/ignored storage path schema outputs/{run_id}/{config_hash}/{checkpoint_id}/ckpt.bin (or equivalent), ensure checkpoints are not committed, and record SHA256 checkpoint file hash referenced by checkpoint_id
 
 ---
 
@@ -72,12 +86,12 @@ description: "Task list template for feature implementation"
 
 Examples of foundational tasks (adjust based on your project):
 
-- [ ] T014 Setup database schema and migrations framework
-- [ ] T015 [P] Implement authentication/authorization framework
-- [ ] T016 [P] Setup API routing and middleware structure
-- [ ] T017 Create base models/entities that all stories depend on
-- [ ] T018 Configure error handling and logging infrastructure
-- [ ] T019 Setup environment configuration management
+- [ ] T026 Setup database schema and migrations framework
+- [ ] T027 [P] Implement authentication/authorization framework
+- [ ] T028 [P] Setup API routing and middleware structure
+- [ ] T029 Create base models/entities that all stories depend on
+- [ ] T030 Configure error handling and logging infrastructure
+- [ ] T031 Setup environment configuration management
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
 
@@ -93,17 +107,17 @@ Examples of foundational tasks (adjust based on your project):
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T020 [P] [US1] Contract test for [endpoint] in tests/contract/test_[name].py
-- [ ] T021 [P] [US1] Integration test for [user journey] in tests/integration/test_[name].py
+- [ ] T032 [P] [US1] Contract test for [endpoint] in tests/contract/test_[name].py
+- [ ] T033 [P] [US1] Integration test for [user journey] in tests/integration/test_[name].py
 
 ### Implementation for User Story 1
 
-- [ ] T022 [P] [US1] Create [Entity1] model in src/models/[entity1].py
-- [ ] T023 [P] [US1] Create [Entity2] model in src/models/[entity2].py
-- [ ] T024 [US1] Implement [Service] in src/services/[service].py (depends on T022, T023)
-- [ ] T025 [US1] Implement [endpoint/feature] in src/[location]/[file].py
-- [ ] T026 [US1] Add validation and error handling
-- [ ] T027 [US1] Add logging for user story 1 operations
+- [ ] T034 [P] [US1] Create [Entity1] model in src/models/[entity1].py
+- [ ] T035 [P] [US1] Create [Entity2] model in src/models/[entity2].py
+- [ ] T036 [US1] Implement [Service] in src/services/[service].py (depends on T034, T035)
+- [ ] T037 [US1] Implement [endpoint/feature] in src/[location]/[file].py
+- [ ] T038 [US1] Add validation and error handling
+- [ ] T039 [US1] Add logging for user story 1 operations
 
 **Checkpoint**: At this point, User Story 1 should be fully functional and testable independently
 
@@ -117,15 +131,15 @@ Examples of foundational tasks (adjust based on your project):
 
 ### Tests for User Story 2 (OPTIONAL - only if tests requested) ⚠️
 
-- [ ] T028 [P] [US2] Contract test for [endpoint] in tests/contract/test_[name].py
-- [ ] T029 [P] [US2] Integration test for [user journey] in tests/integration/test_[name].py
+- [ ] T040 [P] [US2] Contract test for [endpoint] in tests/contract/test_[name].py
+- [ ] T041 [P] [US2] Integration test for [user journey] in tests/integration/test_[name].py
 
 ### Implementation for User Story 2
 
-- [ ] T030 [P] [US2] Create [Entity] model in src/models/[entity].py
-- [ ] T031 [US2] Implement [Service] in src/services/[service].py
-- [ ] T032 [US2] Implement [endpoint/feature] in src/[location]/[file].py
-- [ ] T033 [US2] Integrate with User Story 1 components (if needed)
+- [ ] T042 [P] [US2] Create [Entity] model in src/models/[entity].py
+- [ ] T043 [US2] Implement [Service] in src/services/[service].py
+- [ ] T044 [US2] Implement [endpoint/feature] in src/[location]/[file].py
+- [ ] T045 [US2] Integrate with User Story 1 components (if needed)
 
 **Checkpoint**: At this point, User Stories 1 AND 2 should both work independently
 
@@ -139,14 +153,14 @@ Examples of foundational tasks (adjust based on your project):
 
 ### Tests for User Story 3 (OPTIONAL - only if tests requested) ⚠️
 
-- [ ] T034 [P] [US3] Contract test for [endpoint] in tests/contract/test_[name].py
-- [ ] T035 [P] [US3] Integration test for [user journey] in tests/integration/test_[name].py
+- [ ] T046 [P] [US3] Contract test for [endpoint] in tests/contract/test_[name].py
+- [ ] T047 [P] [US3] Integration test for [user journey] in tests/integration/test_[name].py
 
 ### Implementation for User Story 3
 
-- [ ] T036 [P] [US3] Create [Entity] model in src/models/[entity].py
-- [ ] T037 [US3] Implement [Service] in src/services/[service].py
-- [ ] T038 [US3] Implement [endpoint/feature] in src/[location]/[file].py
+- [ ] T048 [P] [US3] Create [Entity] model in src/models/[entity].py
+- [ ] T049 [US3] Implement [Service] in src/services/[service].py
+- [ ] T050 [US3] Implement [endpoint/feature] in src/[location]/[file].py
 
 **Checkpoint**: All user stories should now be independently functional
 

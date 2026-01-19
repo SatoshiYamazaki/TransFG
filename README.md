@@ -9,11 +9,27 @@ Official PyTorch code for the paper:  [*TransFG: A Transformer Architecture for 
 
 ![](./TransFG.png)
 
-## Dependencies:
-+ Python 3.7.3
-+ PyTorch 1.5.1
-+ torchvision 0.6.1
-+ ml_collections
+## Environment (MacBook Air M2 / modern stack)
+
+- Python 3.10+
+- PyTorch 2.x with MPS support (Metal) or CPU
+- torchvision 0.16+
+- TensorBoard + FiftyOne for logging/inspection
+
+Create the conda environment:
+
+```bash
+conda env create -f environment.yml
+conda activate transfg-mps
+```
+
+Or install via pip (arm64 macOS):
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
 
 ## Usage
 ### 1. Download Google pre-trained ViT models
@@ -43,12 +59,45 @@ Install dependencies with the following command:
 pip3 install -r requirements.txt
 ```
 
-### 4. Train
+### 4. Train (MPS/CPU friendly)
 
-To train TransFG on CUB-200-2011 dataset with 4 gpus in FP-16 mode for 10000 steps run:
+Single-device run on MacBook Air M2 (MPS) for smoke validation (uses synthetic tiny data):
 
 ```bash
-CUDA_VISIBLE_DEVICES=0,1,2,3 python3 -m torch.distributed.launch --nproc_per_node=4 train.py --dataset CUB_200_2011 --split overlap --num_steps 10000 --fp16 --name sample_run
+python train.py --name smoke_mps --dataset synthetic --model_type testing --img_size 64 \
+  --num_steps 10 --eval_every 5 --train_batch_size 4 --eval_batch_size 2
+```
+
+Full run on real data (update paths accordingly):
+
+```bash
+python train.py --name cub_run --dataset CUB_200_2011 --data_root /path/to/data \
+  --pretrained_dir /path/to/ViT-B_16.npz --num_steps 10000 --eval_every 500 \
+  --train_batch_size 16 --eval_batch_size 8 --amp
+```
+
+TensorBoard logs are written to `output/tb/<run_name>` and a final FiftyOne-compatible
+prediction file to `output/<run_name>/fiftyone/predictions.jsonl`.
+
+### 5. Eval-only / inference with prediction export
+
+Given a fine-tuned checkpoint:
+
+```bash
+python train.py --name cub_eval --dataset CUB_200_2011 --data_root /path/to/data \
+  --pretrained_dir /path/to/ViT-B_16.npz --checkpoint output/cub_run_checkpoint.bin \
+  --eval_only --eval_batch_size 8
+```
+
+The eval run writes metrics to TensorBoard and predictions to
+`output/cub_eval/fiftyone/predictions.jsonl`.
+
+### 6. Pytest smoke tests (tiny subsets)
+
+Run the fast smoke suite (≤2 batches/split, synthetic data):
+
+```bash
+pytest -m "not slow" tests/test_smoke.py
 ```
 
 ## Citation
