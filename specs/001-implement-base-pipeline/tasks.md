@@ -54,12 +54,12 @@
 
 ### Implementation for User Story 1
 
-- [ ] T015 [US1] Extend train.py CLI to accept flower102 tiny subset flags, data_root, prefer_mps, and output_dir with fp32-only defaults
-- [ ] T016 [P] [US1] Integrate device selection + deterministic seeding from utils/dist_util.py and utils/data_utils.py inside train.py startup
-- [ ] T017 [P] [US1] Emit TensorBoard scalars (loss/accuracy/lr) to output/tb/<run> in train.py
-- [ ] T018 [US1] Write FiftyOne-compatible predictions JSONL and labelmap during eval_every in train.py using utils/data_utils.py helpers for flower102
-- [ ] T019 [US1] Generate retention note output/<run>/RETENTION.txt recording TTL/location in train.py
-- [ ] T020 [US1] Enforce fp32-only training (no AMP) and CPU fallback paths in train.py forward/backward and checkpoint save
+- [X] T015 [US1] Extend train.py CLI to accept flower102 tiny subset flags, data_root, prefer_mps, and output_dir with fp32-only defaults
+- [X] T016 [P] [US1] Integrate device selection + deterministic seeding from utils/dist_util.py and utils/data_utils.py inside train.py startup
+- [X] T017 [P] [US1] Emit TensorBoard scalars (loss/accuracy/lr) to output/tb/<run> in train.py
+- [X] T018 [US1] Write FiftyOne-compatible predictions JSONL and labelmap during eval_every in train.py using utils/data_utils.py helpers for flower102
+- [X] T019 [US1] Generate retention note output/<run>/RETENTION.txt recording TTL/location in train.py
+- [X] T020 [US1] Enforce fp32-only training (no AMP) and CPU fallback paths in train.py forward/backward and checkpoint save
 
 **Checkpoint**: User Story 1 independently testable via smoke train command
 
@@ -78,10 +78,10 @@
 
 ### Implementation for User Story 2
 
-- [ ] T023 [US2] Extend eval.py CLI args for flower102 dataset/model/checkpoint/tiny_infer_subset/prefer_mps/output_dir handling
-- [ ] T024 [P] [US2] Implement checkpoint load with fail-fast missing/invalid handling and map_location in eval.py
-- [ ] T025 [P] [US2] Write FiftyOne predictions JSONL and labelmap for eval-only path in eval.py using shared helpers
-- [ ] T026 [US2] Log eval metrics to output/tb/<run> in eval.py with parity to training logs
+- [X] T023 [US2] Extend eval.py CLI args for flower102 dataset/model/checkpoint/tiny_infer_subset/prefer_mps/output_dir handling
+- [X] T024 [P] [US2] Implement checkpoint load with fail-fast missing/invalid handling and map_location in eval.py
+- [X] T025 [P] [US2] Write FiftyOne predictions JSONL and labelmap for eval-only path in eval.py using shared helpers
+- [X] T026 [US2] Log eval metrics to output/tb/<run> in eval.py with parity to training logs
 
 **Checkpoint**: User Story 2 independently testable via eval-only command
 
@@ -100,8 +100,8 @@
 ### Implementation for User Story 3
 
 - [ ] T028 [P] [US3] Implement env_stamp builder capturing required fields (config_hash, env_hash, device info, package versions, fp16=false) in utils/dist_util.py
-- [ ] T029 [US3] Write env_stamp.json during training runs in train.py using builder and run args
-- [ ] T030 [US3] Write env_stamp.json during eval-only runs in eval.py capturing checkpoint and tiny subset info
+- [X] T029 [US3] Write env_stamp.json during training runs in train.py using builder and run args
+- [X] T030 [US3] Write env_stamp.json during eval-only runs in eval.py capturing checkpoint and tiny subset info
 - [ ] T031 [P] [US3] Document env hash export/checksum commands in specs/001-implement-base-pipeline/quickstart.md and ensure TDD markers reference them
 - [ ] T032 [P] [US3] Add requirements/env hash validation helper (reads env_export.yml or pip freeze) to utils/dist_util.py and include in env_stamp
 

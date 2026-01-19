@@ -20,6 +20,7 @@ from tqdm import tqdm
 from models.modeling import VisionTransformer, CONFIGS
 from utils.scheduler import WarmupLinearSchedule, WarmupCosineSchedule
 from utils.data_utils import get_loader, build_output_paths
+from utils.dataset import write_labelmap, default_labels_for_dataset
 from utils.dist_util import get_world_size, detect_device, set_seed_all, write_env_stamp
 
 logger = logging.getLogger(__name__)
@@ -88,6 +89,8 @@ def setup(args):
         num_classes = 102
     else:
         raise ValueError(f"Unknown dataset {args.dataset}")
+
+    args.num_classes = num_classes
 
     model = VisionTransformer(config, args.img_size, zero_head=True, num_classes=num_classes,                                                   smoothing_value=args.smoothing_value)
 
@@ -189,6 +192,25 @@ def train(args, model):
     paths = build_output_paths(args.output_dir, args.name)
     writer = SummaryWriter(log_dir=str(paths["tb_dir"]))
 
+    num_classes = getattr(args, "num_classes", None)
+    if num_classes is None:
+        num_classes = getattr(getattr(model, "classifier", None), "out_features", None)
+    if num_classes is None:
+        num_classes = 102 if args.dataset == "flower102" else 1
+    args.num_classes = num_classes
+
+    if args.local_rank in [-1, 0]:
+        write_labelmap(default_labels_for_dataset(args.dataset, args.num_classes), paths["labelmap_path"])
+        write_env_stamp(args, paths["env_stamp_path"], args.device)
+        paths["retention_path"].write_text(
+            "\n".join([
+                "Retention: 90 days minimum",
+                f"Location: {paths['run_dir']}/",
+                "Artifacts: TensorBoard logs, FiftyOne predictions, env_stamp.json",
+                "Notes: Checkpoints are not committed; delete after TTL unless extended.",
+            ])
+        )
+
     args.train_batch_size = args.train_batch_size // args.gradient_accumulation_steps
 
     # Prepare dataset
@@ -265,7 +287,14 @@ def train(args, model):
                     writer.add_scalar("train/lr", scalar_value=scheduler.get_last_lr()[0], global_step=global_step)
                 if global_step % args.eval_every == 0:
                     with torch.no_grad():
-                        accuracy = valid(args, model, writer, test_loader, global_step)
+                        accuracy = valid(
+                            args,
+                            model,
+                            writer,
+                            test_loader,
+                            global_step,
+                            fiftyone_path=paths["fiftyone_path"] if args.local_rank in [-1, 0] else None,
+                        )
                     if args.local_rank in [-1, 0]:
                         if best_acc < accuracy:
                             save_model(args, model)
@@ -289,8 +318,14 @@ def train(args, model):
 
     if args.local_rank in [-1, 0] and args.fiftyone_output:
         with torch.no_grad():
-            valid(args, model, writer, test_loader, global_step,
-                  fiftyone_path=Path(args.fiftyone_output))
+            valid(
+                args,
+                model,
+                writer,
+                test_loader,
+                global_step,
+                fiftyone_path=Path(args.fiftyone_output),
+            )
 
     writer.close()
     logger.info("Best Accuracy: \t%f" % best_acc)

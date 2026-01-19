@@ -8,6 +8,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from train import setup, valid
 from utils.data_utils import get_loader, build_output_paths
+from utils.dataset import write_labelmap, default_labels_for_dataset
 from utils.dist_util import detect_device, write_env_stamp
 
 logger = logging.getLogger(__name__)
@@ -53,6 +54,9 @@ def main():
     args.nprocs = args.n_gpu if args.n_gpu else 1
     args.seed = getattr(args, "seed", 42)
 
+    if not Path(args.checkpoint).exists():
+        raise FileNotFoundError(f"Checkpoint not found at {args.checkpoint}")
+
     _, model = setup(args)
     checkpoint = torch.load(args.checkpoint, map_location=args.device)
     state_dict = checkpoint.get('model', checkpoint)
@@ -62,11 +66,20 @@ def main():
 
     stamp_path = paths["env_stamp_path"]
     write_env_stamp(args, stamp_path, args.device)
+    write_labelmap(default_labels_for_dataset(args.dataset, args.num_classes), paths["labelmap_path"])
+    paths["retention_path"].write_text(
+        "\n".join([
+            "Retention: 90 days minimum",
+            f"Location: {paths['run_dir']}/",
+            "Artifacts: TensorBoard logs, FiftyOne predictions, env_stamp.json",
+            "Notes: Checkpoints are not committed; delete after TTL unless extended.",
+        ])
+    )
 
     # Data
     _, test_loader = get_loader(args)
 
-    writer = SummaryWriter(log_dir=os.path.join(args.output_dir, "tb", f"{args.name}"))
+    writer = SummaryWriter(log_dir=str(paths["tb_dir"]))
     with torch.no_grad():
         valid(args, model, writer, test_loader, global_step=0, fiftyone_path=Path(args.fiftyone_output))
     writer.close()
